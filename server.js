@@ -62,7 +62,10 @@ const storage = multer.diskStorage({
 app.use(bodyParser.json());
 app.use(
   cors({
-    origin: "https://crm.starwaywebdigital.com",
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
