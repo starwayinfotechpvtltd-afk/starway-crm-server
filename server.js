@@ -29,6 +29,7 @@ import User from "./Models/UserModel.js";
 import { verifyToken } from "./Middlewares/AuthMiddleware.js";
 import attendanceRoutes from "./Routes/attendanceRoutes.js";
 import DocumentRoutes from "./Routes/DocumentRoutes.js";
+import tasksRoutes from "./Routes/Tasksroutes.js";
 
 dotenv.config();
 
@@ -90,6 +91,7 @@ app.use("/api", serviceTypeRoutes);
 app.use("/api/docs", DocumentRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/api/tasks", tasksRoutes);
 
 const transporter = nodemailer.createTransport({
   host: "smtppro.zoho.com",

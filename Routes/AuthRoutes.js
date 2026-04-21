@@ -36,7 +36,12 @@ router.post("/login", async (req, res) => {
       { expiresIn: "24h" },
       (err, token) => {
         if (err) throw err;
-        res.json({ token, role: user.role });
+        res.json({
+          token,
+          role: user.role,
+          userId: user._id,        
+          username: user.username, 
+        });
       }
     );
   } catch (error) {
@@ -46,7 +51,7 @@ router.post("/login", async (req, res) => {
 });
 
 // Register
-router.post("/register",  async (req, res) => {
+router.post("/register", async (req, res) => {
   const { username, email, password, role } = req.body;
 
   try {
