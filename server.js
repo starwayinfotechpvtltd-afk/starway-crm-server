@@ -382,7 +382,7 @@ import DocumentRoutes from "./Routes/DocumentRoutes.js";
 import tasksRoutes from "./Routes/Tasksroutes.js";
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
 // Path setup
 const __filename = fileURLToPath(import.meta.url);
