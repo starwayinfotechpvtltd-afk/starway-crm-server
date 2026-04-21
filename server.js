@@ -34,7 +34,7 @@ import tasksRoutes from "./Routes/Tasksroutes.js";
 dotenv.config();
 
 // App Config
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT;
 const app = express();
 connectDB();
 const upload = multer({ dest: "uploads/" });
@@ -63,7 +63,10 @@ const storage = multer.diskStorage({
 app.use(bodyParser.json());
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
