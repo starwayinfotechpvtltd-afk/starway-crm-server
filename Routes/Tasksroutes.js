@@ -14,13 +14,13 @@ const router = express.Router();
 // All task routes require authentication
 router.use(verifyToken);
 
-router.get("/:projectId", verifyToken, getProjectTasks);
+
 router.post("/:projectId", verifyToken, createTask);
 router.put("/:projectId/:taskId", verifyToken, updateTask);
 router.post("/:projectId/:taskId/complete", verifyToken, markTaskComplete);
 router.delete("/:projectId/:taskId", verifyToken, deleteTask);
 router.get("/:projectId/completions", verifyToken, getProjectCompletions);
-
+router.get("/:projectId", verifyToken, getProjectTasks);
 export default router;
 
 // ─────────────────────────────────────────────────────────────────────────────
