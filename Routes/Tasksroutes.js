@@ -6,7 +6,7 @@ import {
   markTaskComplete,
   deleteTask,
   getProjectCompletions,
-} from "../Controllers/taskController.js";
+} from "../Controllers/TaskController.js";
 import { verifyToken } from "../Middlewares/AuthMiddleware.js"; // adjust path
 
 const router = express.Router();
