@@ -647,6 +647,26 @@ router.delete("/users/:userId/leave-records/:recordId", verifyToken, isAdmin, as
 // Helper: Get today's YYYY-MM-DD format
 const getTodayDateString = () => new Date().toISOString().split("T")[0];
 
+// Geolocation helper: Target 22.539493, 88.377259
+const TARGET_LAT = 22.539493;
+const TARGET_LNG = 88.377259;
+const MAX_RADIUS_METERS = 100; // Strictly 100 meters
+
+const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3; // metres
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
 // Helper: Get user's active limits (User exceptions override Role defaults)
 const getUserTimeLimits = async (user) => {
   let workLimits = user.customWorkHours || null;
@@ -678,6 +698,16 @@ router.get("/attendance/today", verifyToken, async (req, res) => {
 // 2. Clock In
 router.post("/attendance/clock-in", verifyToken, async (req, res) => {
   try {
+    const { lat, lng } = req.body;
+    if (lat !== undefined && lng !== undefined) {
+      const distance = calculateDistanceMeters(Number(lat), Number(lng), TARGET_LAT, TARGET_LNG);
+      if (distance > MAX_RADIUS_METERS) {
+        return res.status(400).json({
+          message: `Location out of range. You are ${Math.round(distance)} meters away from the required work location (Target: ${TARGET_LAT}, ${TARGET_LNG}).`
+        });
+      }
+    }
+
     const today = getTodayDateString();
     let attendance = await AttendanceModel.findOne({ user: req.user.id, date: today });
     if (attendance) return res.status(400).json({ message: "Already Clocked In today." });
@@ -690,7 +720,8 @@ router.post("/attendance/clock-in", verifyToken, async (req, res) => {
       date: today,
       clockIn: new Date(),
       requiredWorkHours: workLimits,
-      allottedBreakTime: breakLimits
+      allottedBreakTime: breakLimits,
+      clockInLocation: lat !== undefined && lng !== undefined ? { lat, lng, verified: true } : undefined
     });
     
     await attendance.save();
@@ -704,10 +735,20 @@ router.post("/attendance/clock-in", verifyToken, async (req, res) => {
 // 3. Take Break
 router.post("/attendance/break/start", verifyToken, async (req, res) => {
   try {
+    const { lat, lng } = req.body;
+    if (lat !== undefined && lng !== undefined) {
+      const distance = calculateDistanceMeters(Number(lat), Number(lng), TARGET_LAT, TARGET_LNG);
+      if (distance > MAX_RADIUS_METERS) {
+        return res.status(400).json({
+          message: `Location out of range. You are ${Math.round(distance)} meters away from the required work location.`
+        });
+      }
+    }
+
     const today = getTodayDateString();
     const attendance = await AttendanceModel.findOne({ user: req.user.id, date: today });
     if (!attendance) return res.status(400).json({ message: "Not Clocked In." });
-    if (attendance.clockOut) return res.status(400).json({ message: "Already Clocked Out." });
+    if (attendance.clockOut) return res.status(400).json({ message: "Already Clocked Out for today." });
 
     const activeBreak = attendance.breaks.find(b => !b.end);
     if (activeBreak) return res.status(400).json({ message: "Already on a break." });
@@ -724,9 +765,20 @@ router.post("/attendance/break/start", verifyToken, async (req, res) => {
 // 4. End Break
 router.post("/attendance/break/end", verifyToken, async (req, res) => {
   try {
+    const { lat, lng } = req.body;
+    if (lat !== undefined && lng !== undefined) {
+      const distance = calculateDistanceMeters(Number(lat), Number(lng), TARGET_LAT, TARGET_LNG);
+      if (distance > MAX_RADIUS_METERS) {
+        return res.status(400).json({
+          message: `Location out of range. You are ${Math.round(distance)} meters away from the required work location.`
+        });
+      }
+    }
+
     const today = getTodayDateString();
     const attendance = await AttendanceModel.findOne({ user: req.user.id, date: today });
     
+    if (!attendance) return res.status(400).json({ message: "Attendance record not found." });
     const activeBreak = attendance.breaks.find(b => !b.end);
     if (!activeBreak) return res.status(400).json({ message: "Not on a break." });
 
@@ -742,24 +794,39 @@ router.post("/attendance/break/end", verifyToken, async (req, res) => {
 // 5. Clock Out
 router.post("/attendance/clock-out", verifyToken, async (req, res) => {
   try {
+    const { lat, lng } = req.body;
+    if (lat !== undefined && lng !== undefined) {
+      const distance = calculateDistanceMeters(Number(lat), Number(lng), TARGET_LAT, TARGET_LNG);
+      if (distance > MAX_RADIUS_METERS) {
+        return res.status(400).json({
+          message: `Location out of range. You are ${Math.round(distance)} meters away from the required work location.`
+        });
+      }
+    }
+
     const today = getTodayDateString();
     const attendance = await AttendanceModel.findOne({ user: req.user.id, date: today });
-    if (!attendance || attendance.clockOut) return res.status(400).json({ message: "Invalid action." });
+    if (!attendance || attendance.clockOut) return res.status(400).json({ message: "Invalid action or already clocked out." });
 
     // End any ongoing break first
     const activeBreak = attendance.breaks.find(b => !b.end);
     if (activeBreak) activeBreak.end = new Date();
 
     attendance.clockOut = new Date();
+    if (lat !== undefined && lng !== undefined) {
+      attendance.clockOutLocation = { lat, lng, verified: true };
+    }
 
-    // Time Calculation strictly as requested
+    // Time Calculation
     let totalBreakTimeMs = 0;
     attendance.breaks.forEach(b => {
-      totalBreakTimeMs += (b.end.getTime() - b.start.getTime());
+      if (b.end && b.start) {
+        totalBreakTimeMs += (b.end.getTime() - b.start.getTime());
+      }
     });
 
     const totalTimeMs = attendance.clockOut.getTime() - attendance.clockIn.getTime();
-    const totalWorkTimeMs = totalTimeMs - totalBreakTimeMs;
+    const totalWorkTimeMs = Math.max(0, totalTimeMs - totalBreakTimeMs);
 
     attendance.totalBreakTime = totalBreakTimeMs;
     attendance.totalWorkTime = totalWorkTimeMs;

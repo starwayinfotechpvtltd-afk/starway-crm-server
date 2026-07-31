@@ -15,8 +15,10 @@ const AttendanceSchema = new Schema({
   breaks: [BreakSchema],
   totalWorkTime: { type: Number, default: 0 }, 
   totalBreakTime: { type: Number, default: 0 }, 
-  requiredWorkHours: { type: Number, required: true }, // Snapshotted per day
-  allottedBreakTime: { type: Number, required: true }  // Snapshotted per day
+  requiredWorkHours: { type: Number, default: 480 }, // Snapshotted per day
+  allottedBreakTime: { type: Number, default: 60 },  // Snapshotted per day
+  clockInLocation: { lat: Number, lng: Number, verified: Boolean },
+  clockOutLocation: { lat: Number, lng: Number, verified: Boolean }
 }, { timestamps: true });
 
 export default model("Attendance", AttendanceSchema);
