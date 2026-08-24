@@ -4,7 +4,7 @@ import {
   getConfig, updateConfig, clockIn, clockOut, startBreak, endBreak,
   getTodayStatus, getMyAttendance, getAllAttendance, getTodayBoard, manualOverride,
   setSaturdayOverride, deleteSaturdayOverride
-} from '../Controllers/AttendanceController.js';
+} from '../Controllers/attendanceController.js';
 
 const router = express.Router();
 router.get('/config', verifyToken, getConfig);
