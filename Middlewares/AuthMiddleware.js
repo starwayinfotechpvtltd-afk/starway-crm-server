@@ -19,9 +19,23 @@ export const verifyToken = (req, res, next) => {
 
 // admin token
 export const isAdmin = (req, res, next) => {
-  if (req.user.role !== "admin")
-    return res.status(403).json({ message: "Access Denied" });
+  if (req.user?.role !== "admin")
+    return res.status(403).json({ message: "Admin Access Required" });
   next();
 };
 
-export default { verifyToken, isAdmin };
+// HR or Admin token
+export const isHR = (req, res, next) => {
+  if (req.user?.role !== "admin" && req.user?.role !== "hr")
+    return res.status(403).json({ message: "HR Access Required" });
+  next();
+};
+
+// Team Lead or Admin token
+export const isTeamLead = (req, res, next) => {
+  if (req.user?.role !== "admin" && req.user?.role !== "team_lead" && req.user?.role !== "manager")
+    return res.status(403).json({ message: "Team Lead or Admin Access Required" });
+  next();
+};
+
+export default { verifyToken, isAdmin, isHR, isTeamLead };

@@ -54,10 +54,22 @@ export const createProject = async (req, res) => {
   }
 };
 
+const sanitizeProjectsForRole = (projects, role) => {
+  if (role !== "developer") return projects;
+  const sanitizeOne = (proj) => {
+    const p = proj.toObject ? proj.toObject() : { ...proj };
+    delete p.amount;
+    delete p.upSale;
+    delete p.upsaleData;
+    return p;
+  };
+  return Array.isArray(projects) ? projects.map(sanitizeOne) : sanitizeOne(projects);
+};
+
 export const getProjects = async (req, res) => {
   try {
     const projects = await Project.find().sort({ createdDate: -1 });
-    res.status(200).json(projects);
+    res.status(200).json(sanitizeProjectsForRole(projects, req.user?.role));
   } catch (error) {
     res.status(404).json({ message: error.message });
   }
@@ -157,7 +169,7 @@ export const getOneTimeProjects = async (req, res) => {
       "assignedDeveloper.id": developerId,
     });
 
-    res.status(200).json(oneTimeProjects);
+    res.status(200).json(sanitizeProjectsForRole(oneTimeProjects, req.user?.role));
   } catch (error) {
     console.error("Error fetching one-time projects:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -173,12 +185,13 @@ export const getSubscriptionBasedProjects = async (req, res) => {
       "assignedDeveloper.id": developerId,
     });
 
-    res.status(200).json(subscriptionBasedProjects);
+    res.status(200).json(sanitizeProjectsForRole(subscriptionBasedProjects, req.user?.role));
   } catch (error) {
     console.error("Error fetching subscription-based projects:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
 export const getWebsiteBasedProjects = async (req, res) => {
   try {
     const developerId = req.user.id;
@@ -188,7 +201,7 @@ export const getWebsiteBasedProjects = async (req, res) => {
       "assignedDeveloper.id": developerId,
     });
 
-    res.status(200).json(subscriptionBasedProjects);
+    res.status(200).json(sanitizeProjectsForRole(subscriptionBasedProjects, req.user?.role));
   } catch (error) {
     console.error("Error fetching website-based projects:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -218,7 +231,7 @@ export const getActiveOneTimeProjects = async (req, res) => {
       "assignedDeveloper.id": developerId,
     });
 
-    res.status(200).json(activeOneTimeProjects);
+    res.status(200).json(sanitizeProjectsForRole(activeOneTimeProjects, req.user?.role));
   } catch (error) {
     console.error("Error fetching active one-time projects:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -235,7 +248,7 @@ export const getActiveSubscriptionBasedProjects = async (req, res) => {
       "assignedDeveloper.id": developerId,
     });
 
-    res.status(200).json(activeSubscriptionBasedProjects);
+    res.status(200).json(sanitizeProjectsForRole(activeSubscriptionBasedProjects, req.user?.role));
   } catch (error) {
     console.error("Error fetching active subscription-based projects:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -252,7 +265,7 @@ export const getActiveWebsiteBasedProjects = async (req, res) => {
       "assignedDeveloper.id": developerId,
     });
 
-    res.status(200).json(websiteBasedProjects);
+    res.status(200).json(sanitizeProjectsForRole(websiteBasedProjects, req.user?.role));
   } catch (error) {
     console.error("Error fetching Website-Based projects:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -268,7 +281,7 @@ export const getTotalActiveProjects = async (req, res) => {
       "assignedDeveloper.id": developerId,
     });
 
-    res.status(200).json(totalActiveProjects);
+    res.status(200).json(sanitizeProjectsForRole(totalActiveProjects, req.user?.role));
   } catch (error) {
     console.error("Error fetching total active projects:", error);
     res.status(500).json({ message: "Internal Server Error" });

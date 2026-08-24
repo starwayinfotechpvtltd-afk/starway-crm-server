@@ -9,14 +9,15 @@ export const getDeveloperDashboardData = async (req, res) => {
 
         // 1. Determine which projects this user is allowed to see
         let projectQuery = {};
-        if (userRole !== "admin") {
+        if (userRole !== "admin" && userRole !== "hr" && userRole !== "manager") {
             const user = await UserModel.findById(userId).select("username").lean();
             const username = user?.username || "";
 
             projectQuery = {
                 $or: [
                     { createdBy: username },
-                    { "assignedDeveloper.id": userId }
+                    { "assignedDeveloper.id": userId },
+                    { "assignedDeveloper.username": new RegExp(`^${username}$`, "i") }
                 ]
             };
         }

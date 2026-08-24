@@ -17,10 +17,20 @@ const getProjectRoleWithUsername = async (projectId, userId, username) => {
     .lean();
   if (!project) return { project: null, role: null };
 
-  const isCreator = project.createdBy === username;
-  const isAssigned = project.assignedDeveloper?.some(
-    (d) => d.id?.toString() === userId?.toString()
-  );
+  const isCreator = 
+    project.createdBy === username || 
+    project.createdBy?.toLowerCase() === username?.toLowerCase() ||
+    project.createdBy === userId?.toString();
+
+  const isAssigned = project.assignedDeveloper?.some((d) => {
+    if (!d) return false;
+    const devId = typeof d === "object" ? (d.id || d._id) : d;
+    const devUser = typeof d === "object" ? d.username : "";
+    return (
+      devId?.toString() === userId?.toString() ||
+      (devUser && devUser.toLowerCase() === username?.toLowerCase())
+    );
+  });
 
   const role = isCreator ? "creator" : isAssigned ? "developer" : null;
   return { project, role };
@@ -96,13 +106,14 @@ export const createTask = async (req, res) => {
 
     const { project, role } = await getProjectRoleWithUsername(projectId, userId, username);
     if (!project) return res.status(404).json({ message: "Project not found" });
-    if (userRole !== "admin" && !role) {
+    const isLeadOrAdmin = userRole === "admin" || userRole === "team_lead" || userRole === "manager";
+    if (!isLeadOrAdmin && !role) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
     const { title, description, links, priority, deadline, assignedTo } = req.body;
 
-    if (role === "developer" && userRole !== "admin") {
+    if (role === "developer" && !isLeadOrAdmin) {
       const projectDevIds = project.assignedDeveloper?.map((d) => d.id?.toString());
       if (assignedTo?.id && !projectDevIds?.includes(assignedTo.id?.toString())) {
         return res.status(403).json({
@@ -140,16 +151,19 @@ export const updateTask = async (req, res) => {
     const username = await getUserFromToken(userId);
     const { project, role } = await getProjectRoleWithUsername(projectId, userId, username);
     if (!project) return res.status(404).json({ message: "Project not found" });
-    if (userRole !== "admin" && !role) {
+    
+    const isLeadOrAdmin = userRole === "admin" || userRole === "team_lead" || userRole === "manager";
+    if (!isLeadOrAdmin && !role) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
     const task = await Task.findOne({ _id: taskId, projectId });
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    const isCreatorOrAdmin = userRole === "admin" || role === "creator";
-    const isAssigned = task.assignedTo?.id?.toString() === userId?.toString();
+    const isCreatorOrAdmin = isLeadOrAdmin || role === "creator";
+    const isAssigned = task.assignedTo?.id?.toString() === userId?.toString() || task.assignedTo?.username?.toLowerCase() === username?.toLowerCase();
     const isDevWithin2Hours = role === "developer" && isTaskWithin2Hours(task);
+    const canEditFullTask = isCreatorOrAdmin || isDevWithin2Hours;
 
     // If they aren't admin/creator, aren't assigned, and aren't a dev within 2 hours
     if (!isCreatorOrAdmin && !isAssigned && !isDevWithin2Hours) {
@@ -158,11 +172,18 @@ export const updateTask = async (req, res) => {
 
     const { title, description, links, priority, deadline, status, assignedTo } = req.body;
 
-    const canEditFullTask = isCreatorOrAdmin || isDevWithin2Hours;
-
     if (!canEditFullTask) {
       // Meaning they are only assigned but past the 2-hour window -> Can only change status
-      if (status) task.status = status;
+      if (status !== undefined) {
+        task.status = status;
+        if (status === "Done") {
+          task.completedAt = task.completedAt || new Date();
+          task.completedBy = { id: userId, username };
+        } else {
+          task.completedAt = null;
+          task.completedBy = null;
+        }
+      }
     } else {
       // Admin, Creator, or Developer within 2 hours -> Full access
       if (title !== undefined) task.title = title;
@@ -170,12 +191,16 @@ export const updateTask = async (req, res) => {
       if (links !== undefined) task.links = links;
       if (priority !== undefined) task.priority = priority;
       if (deadline !== undefined) task.deadline = deadline;
-      if (status !== undefined) task.status = status;
       if (assignedTo !== undefined) task.assignedTo = assignedTo;
-
-      if (status === "Done" && !task.completedAt) {
-        task.completedAt = new Date();
-        task.completedBy = { id: userId, username };
+      if (status !== undefined) {
+        task.status = status;
+        if (status === "Done") {
+          task.completedAt = task.completedAt || new Date();
+          task.completedBy = { id: userId, username };
+        } else {
+          task.completedAt = null;
+          task.completedBy = null;
+        }
       }
     }
 
@@ -276,12 +301,6 @@ export const deleteTask = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
 // ── GET /api/tasks/:projectId/completions ─────────────────────────────────────
 export const getProjectCompletions = async (req, res) => {
   try {
@@ -319,6 +338,97 @@ export const getProjectCompletions = async (req, res) => {
     res.status(200).json(completions);
   } catch (error) {
     console.error("getProjectCompletions error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// ── GET /api/tasks/developer/tasks ───────────────────────────────────────────
+export const getMyTasks = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const user = await UserModel.findById(userId).select("username").lean();
+    const username = user?.username || "";
+
+    let query = {};
+    if (userRole === "admin") {
+      // Admins can see all tasks across the company when accessing developer hub
+      query = {};
+    } else {
+      query = {
+        $or: [
+          { "assignedTo.id": userId },
+          { "assignedTo.id": userId.toString() },
+          { "assignedTo.username": username },
+          { "assignedTo.username": new RegExp(`^${username}$`, "i") },
+          { "createdBy.id": userId },
+          { "createdBy.id": userId.toString() },
+        ],
+      };
+    }
+
+    const tasks = await Task.find(query)
+      .populate("projectId", "projectName clientName status amount serviceType")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json(tasks);
+  } catch (error) {
+    console.error("getMyTasks error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// ── PUT /api/tasks/bulk-status ──────────────────────────────────────────────
+export const bulkUpdateTaskStatus = async (req, res) => {
+  try {
+    const { taskIds, status } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ message: "taskIds array is required" });
+    }
+
+    const isLeadOrAdmin = userRole === "admin" || userRole === "team_lead" || userRole === "manager";
+    const query = { _id: { $in: taskIds } };
+    if (!isLeadOrAdmin) {
+      // Developers can only bulk-update tasks assigned to them
+      query["assignedTo.id"] = userId;
+    }
+
+    const updateFields = { status };
+    if (status === "Done") {
+      updateFields.completedAt = new Date();
+      updateFields.completedBy = { id: userId, username: req.user.username || "Staff" };
+    } else {
+      updateFields.completedAt = null;
+      updateFields.completedBy = null;
+    }
+
+    const result = await Task.updateMany(query, { $set: updateFields });
+
+    res.json({
+      message: `Successfully updated ${result.modifiedCount} task(s) to ${status}`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("bulkUpdateTaskStatus error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// ── GET /api/tasks/all ───────────────────────────────────────────────────────
+export const getAllTasks = async (req, res) => {
+  try {
+    const tasks = await Task.find()
+      .populate("projectId", "projectName clientName status amount serviceType")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json(tasks);
+  } catch (error) {
+    console.error("getAllTasks error:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };

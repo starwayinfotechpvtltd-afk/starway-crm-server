@@ -86,6 +86,8 @@ export const TaskCompletion = mongoose.model(
   TaskCompletionSchema
 );
 
+export default Task;
+
 
 
 

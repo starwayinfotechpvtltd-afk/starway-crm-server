@@ -22,6 +22,10 @@ import DocumentRoutes from "./Routes/DocumentRoutes.js";
 import tasksRoutes from "./Routes/Tasksroutes.js";
 import TeamRoutes from "./Routes/TeamRoutes.js";
 import scheduledTaskRoutes from "./Routes/scheduledTaskRoutes.js";
+import DepartmentRoutes from "./Routes/DepartmentRoutes.js";
+import PayrollEngineRoutes from "./Routes/PayrollEngineRoutes.js";
+import attendanceRoutes from './Routes/attendanceRoutes.js';
+import shiftRoutes from './Routes/shiftRoutes.js';
 
 
 const app = express();
@@ -125,6 +129,10 @@ app.use("/api/docs", DocumentRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/teams", TeamRoutes);
 app.use("/api/scheduled-tasks", scheduledTaskRoutes);
+app.use("/api/departments", DepartmentRoutes);
+app.use("/api/payroll-engine", PayrollEngineRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/shifts', shiftRoutes);
 
 // ================= FILE UPLOAD =================
 app.post("/api/upload", upload.array("images", 10), (req, res) => {

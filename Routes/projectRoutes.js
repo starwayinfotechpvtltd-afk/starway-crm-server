@@ -23,9 +23,9 @@ const router = express.Router();
 
 router.post("/projects", verifyToken, createProject);
 
-router.get("/projects", getProjects);
+router.get("/projects", verifyToken, getProjects);
 
-router.delete("/projects/:id", deleteProject);
+router.delete("/projects/:id", verifyToken, isAdmin, deleteProject);
 
 router.put("/projects/:id", verifyToken, updateProject);
 
@@ -40,8 +40,6 @@ router.get("/projects/total-active", verifyToken, getTotalActiveProjects);
 router.get("/projects/my-projects", verifyToken, getUserProjects);
 
 router.post("/projects/:id/updates", verifyToken, addProjectUpdate);
-
-router.get("/projects/:id/updates", verifyToken, getProjectUpdates);
 
 router.get("/projects/:id/updates", verifyToken, getProjectUpdates);
 
